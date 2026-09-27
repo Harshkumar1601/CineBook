@@ -1,0 +1,15 @@
+{
+  "name": "ticket-booking-microservices",
+  "version": "1.0.0",
+  "description": "Microservices-Based Movie Ticket Booking System — College Practical-6",
+  "private": true,
+  "scripts": {
+    "install:all": "cd user-service && npm install && cd ../movie-service && npm install && cd ../show-seat-service && npm install && cd ../booking-service && npm install && cd ../notification-service && npm install && cd ../api-gateway && npm install",
+    "start:gateway":       "cd api-gateway && npm start",
+    "start:user":          "cd user-service && npm start",
+    "start:movie":         "cd movie-service && npm start",
+    "start:show":          "cd show-seat-service && npm start",
+    "start:booking":       "cd booking-service && npm start",
+    "start:notification":  "cd notification-service && npm start"
+  }
+}

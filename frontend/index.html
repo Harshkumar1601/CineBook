@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CineBook — Microservices Ticket Booking</title>
+  <meta name="description" content="A microservices-based movie ticket booking system demonstrating API Gateway, synchronous and asynchronous communication, GraphQL, and RabbitMQ." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🎬</span>
+        <span class="logo-text">CineBook</span>
+        <span class="logo-badge">Microservices</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-page="dashboard" id="nav-dashboard">Dashboard</button>
+        <button class="nav-btn" data-page="movies"    id="nav-movies">Movies</button>
+        <button class="nav-btn" data-page="bookings"  id="nav-bookings">My Bookings</button>
+        <button class="nav-btn" data-page="monitor"   id="nav-monitor">Comm. Monitor</button>
+        <button class="nav-btn" data-page="graphql"   id="nav-graphql">GraphQL</button>
+      </nav>
+      <!-- User selector -->
+      <div class="user-selector">
+        <span class="user-label">👤</span>
+        <select id="active-user" class="user-select">
+          <option value="">Select User</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Content ──────────────────────────────────── -->
+  <main class="main">
+
+    <!-- ══ PAGE: Dashboard ════════════════════════════════ -->
+    <section id="page-dashboard" class="page active">
+      <div class="hero">
+        <div class="hero-content">
+          <h1 class="hero-title">Microservices Movie Booking</h1>
+          <p class="hero-subtitle">College Practical-6 — Demonstrating multi-service architecture, synchronous & asynchronous communication, GraphQL, and API Gateway</p>
+        </div>
+      </div>
+
+      <!-- Architecture overview cards -->
+      <div class="section-title">System Architecture</div>
+      <div class="arch-grid">
+        <div class="arch-card gateway">
+          <div class="arch-icon">🔀</div>
+          <div class="arch-name">API Gateway</div>
+          <div class="arch-port">:8000</div>
+          <div class="arch-desc">Single entry point for all client requests. Routes to services, hosts GraphQL.</div>
+          <div class="arch-status" id="status-gateway">●</div>
+        </div>
+        <div class="arch-card user-svc">
+          <div class="arch-icon">👥</div>
+          <div class="arch-name">User Service</div>
+          <div class="arch-port">:8001</div>
+          <div class="arch-desc">User registration, login, and profile management.</div>
+          <div class="arch-status" id="status-user">●</div>
+        </div>
+        <div class="arch-card movie-svc">
+          <div class="arch-icon">🎥</div>
+          <div class="arch-name">Movie Service</div>
+          <div class="arch-port">:8002</div>
+          <div class="arch-desc">Movie catalog with CRUD operations.</div>
+          <div class="arch-status" id="status-movie">●</div>
+        </div>
+        <div class="arch-card booking-svc">
+          <div class="arch-icon">🎟️</div>
+          <div class="arch-name">Booking Service</div>
+          <div class="arch-port">:8003</div>
+          <div class="arch-desc">Core business service. Synchronously validates users, movies, seats then publishes async events.</div>
+          <div class="arch-status" id="status-booking">●</div>
+        </div>
+        <div class="arch-card show-svc">
+          <div class="arch-icon">🪑</div>
+          <div class="arch-name">Show/Seat Service</div>
+          <div class="arch-port">:8004</div>
+          <div class="arch-desc">Shows, theatres, and seat management with LOCK mechanism.</div>
+          <div class="arch-status" id="status-show">●</div>
+        </div>
+        <div class="arch-card notif-svc">
+          <div class="arch-icon">🔔</div>
+          <div class="arch-name">Notification Service</div>
+          <div class="arch-port">:8005</div>
+          <div class="arch-desc">Async consumer. Reads from RabbitMQ and generates booking notifications.</div>
+          <div class="arch-status" id="status-notif">●</div>
+        </div>
+      </div>
+
+      <!-- Communication types -->
+      <div class="comm-types">
+        <div class="comm-card sync">
+          <div class="comm-label">SYNCHRONOUS</div>
+          <div class="comm-flow">
+            Booking Service → User Service<br/>
+            Booking Service → Movie Service<br/>
+            Booking Service → Show/Seat Service (verify + lock + book)
+          </div>
+          <div class="comm-tech">HTTP / REST</div>
+        </div>
+        <div class="comm-card async">
+          <div class="comm-label">ASYNCHRONOUS</div>
+          <div class="comm-flow">
+            Booking Service → RabbitMQ → Notification Service
+          </div>
+          <div class="comm-tech">RabbitMQ (AMQP)</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-lg pulse" onclick="checkAllServices()">
+        🔍 Check All Services
+      </button>
+    </section>
+
+    <!-- ══ PAGE: Movies ════════════════════════════════════ -->
+    <section id="page-movies" class="page">
+      <div class="page-header">
+        <h2>🎥 Movies</h2>
+        <p>Select a movie to view available shows and book tickets.</p>
+      </div>
+      <div id="movies-grid" class="movies-grid">
+        <div class="loader">Loading movies...</div>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: Shows ═════════════════════════════════════ -->
+    <section id="page-shows" class="page">
+      <button class="btn btn-ghost back-btn" onclick="showPage('movies')">← Back to Movies</button>
+      <div class="page-header">
+        <h2 id="shows-movie-title">Shows</h2>
+        <p>Select a show to choose your seats.</p>
+      </div>
+      <div id="shows-list" class="shows-list">
+        <div class="loader">Loading shows...</div>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: Seat Selection ════════════════════════════ -->
+    <section id="page-seats" class="page">
+      <button class="btn btn-ghost back-btn" onclick="showPage('shows')">← Back to Shows</button>
+      <div class="page-header">
+        <h2>🪑 Select Seats</h2>
+      </div>
+
+      <div class="show-info-banner" id="show-info-banner"></div>
+
+      <!-- Seat legend -->
+      <div class="seat-legend">
+        <div class="legend-item"><div class="seat-demo available"></div> Available</div>
+        <div class="legend-item"><div class="seat-demo selected"></div> Selected</div>
+        <div class="legend-item"><div class="seat-demo locked"></div> Locked</div>
+        <div class="legend-item"><div class="seat-demo booked"></div> Booked</div>
+      </div>
+
+      <!-- Screen indicator -->
+      <div class="screen-bar"><span>SCREEN</span></div>
+
+      <div id="seat-grid" class="seat-grid">
+        <div class="loader">Loading seats...</div>
+      </div>
+
+      <div class="booking-summary" id="booking-summary" style="display:none;">
+        <div class="summary-row">
+          <span>Selected Seats:</span>
+          <span id="selected-seats-display">—</span>
+        </div>
+        <div class="summary-row">
+          <span>Total Amount:</span>
+          <span id="total-amount-display">₹0</span>
+        </div>
+        <button class="btn btn-primary btn-lg" id="book-btn" onclick="bookTickets()">
+          🎟️ Book Tickets
+        </button>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: Booking Confirmation ═════════════════════ -->
+    <section id="page-confirmation" class="page">
+      <div class="confirmation-card" id="confirmation-card">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- ══ PAGE: My Bookings ═══════════════════════════════ -->
+    <section id="page-bookings" class="page">
+      <div class="page-header">
+        <h2>🎟️ My Bookings</h2>
+        <p>Your booking history.</p>
+      </div>
+      <div id="bookings-list" class="bookings-list">
+        <div class="loader">Select a user to see bookings.</div>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: Communication Monitor ════════════════════ -->
+    <section id="page-monitor" class="page">
+      <div class="page-header">
+        <h2>📡 Microservice Communication Monitor</h2>
+        <p>Observe synchronous and asynchronous communication in real-time.</p>
+      </div>
+
+      <div class="monitor-layout">
+        <!-- Left: Event log -->
+        <div class="monitor-log-panel">
+          <div class="panel-title">
+            Event Log
+            <button class="btn btn-sm" onclick="clearLog()">Clear</button>
+          </div>
+          <div id="comm-log" class="comm-log">
+            <div class="log-empty">No events yet. Book a ticket to see the communication flow.</div>
+          </div>
+        </div>
+
+        <!-- Right: Notifications from RabbitMQ -->
+        <div class="monitor-notif-panel">
+          <div class="panel-title">
+            🔔 Notifications
+            <small style="font-size:0.7rem; opacity:0.6">(from RabbitMQ)</small>
+            <button class="btn btn-sm" onclick="refreshNotifications()">Refresh</button>
+          </div>
+          <div id="notifications-panel" class="notifications-panel">
+            <div class="log-empty">No notifications yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Architecture flow diagram -->
+      <div class="flow-diagram">
+        <div class="panel-title">Communication Flow</div>
+        <div class="flow-chart">
+          <div class="flow-node client">Client / Frontend</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-node gateway">API Gateway :8000</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-branches">
+            <div class="flow-branch">
+              <div class="flow-node user-svc">User Service :8001</div>
+              <div class="flow-tag sync">SYNC</div>
+            </div>
+            <div class="flow-branch">
+              <div class="flow-node booking-svc">Booking Service :8003</div>
+            </div>
+            <div class="flow-branch">
+              <div class="flow-node movie-svc">Movie Service :8002</div>
+              <div class="flow-tag sync">SYNC</div>
+            </div>
+          </div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-node show-svc">Show/Seat Service :8004</div>
+          <div class="flow-arrow async-arrow">↓ (async)</div>
+          <div class="flow-node mq">RabbitMQ</div>
+          <div class="flow-arrow async-arrow">↓ (consume)</div>
+          <div class="flow-node notif-svc">Notification Service :8005</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ PAGE: GraphQL ════════════════════════════════════ -->
+    <section id="page-graphql" class="page">
+      <div class="page-header">
+        <h2>⚡ GraphQL Explorer</h2>
+        <p>Execute GraphQL queries that aggregate data from multiple microservices.</p>
+      </div>
+
+      <div class="graphql-layout">
+        <div class="gql-editor-panel">
+          <div class="panel-title">Query Editor</div>
+
+          <!-- Preset queries -->
+          <div class="gql-presets">
+            <button class="preset-btn" onclick="loadPreset('movies')">Get All Movies</button>
+            <button class="preset-btn" onclick="loadPreset('movie')">Movie with Shows</button>
+            <button class="preset-btn" onclick="loadPreset('booking')">Get Booking</button>
+          </div>
+
+          <textarea id="gql-query" class="gql-textarea" spellcheck="false">query {
+  movies {
+    id
+    title
+    genre
+    language
+    duration
+    rating
+  }
+}</textarea>
+
+          <div class="gql-vars-label">Variables (JSON)</div>
+          <textarea id="gql-vars" class="gql-textarea small" spellcheck="false">{}</textarea>
+
+          <button class="btn btn-primary" onclick="executeGraphQL()">▶ Run Query</button>
+        </div>
+
+        <div class="gql-result-panel">
+          <div class="panel-title">Response</div>
+          <pre id="gql-result" class="gql-result">// Response will appear here</pre>
+        </div>
+      </div>
+
+      <div class="gql-examples">
+        <div class="panel-title">Sample Queries</div>
+        <div class="examples-grid">
+          <div class="example-card">
+            <div class="example-title">Movie with Shows + Available Seats</div>
+            <pre class="example-code">query {
+  movie(id: "MOVIE_ID") {
+    title
+    genre
+    shows {
+      theatreName
+      date
+      time
+      availableSeats {
+        seatNumber
+        price
+      }
+    }
+  }
+}</pre>
+          </div>
+          <div class="example-card">
+            <div class="example-title">Booking with User + Movie</div>
+            <pre class="example-code">query {
+  booking(id: "BOOKING_ID") {
+    id
+    status
+    seats
+    totalAmount
+    user {
+      name
+      email
+    }
+    movie {
+      title
+      genre
+    }
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Toast Notifications ──────────────────────────── -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ── Loading Overlay ──────────────────────────────── -->
+  <div id="loading-overlay" class="loading-overlay" style="display:none;">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <div id="loading-text" class="loading-text">Processing...</div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

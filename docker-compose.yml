@@ -1,0 +1,140 @@
+version: '3.8'
+
+services:
+  # ── Infrastructure ─────────────────────────────────────
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ticket-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ticket-network
+
+  # ── Microservices ───────────────────────────────────────
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      PORT: 8001
+      MONGO_URI: mongodb://mongodb:27017/ticket_users
+    depends_on:
+      - mongodb
+    networks:
+      - ticket-network
+
+  movie-service:
+    build: ./movie-service
+    container_name: movie-service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      PORT: 8002
+      MONGO_URI: mongodb://mongodb:27017/ticket_movies
+    depends_on:
+      - mongodb
+    networks:
+      - ticket-network
+
+  show-seat-service:
+    build: ./show-seat-service
+    container_name: show-seat-service
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      PORT: 8004
+      MONGO_URI: mongodb://mongodb:27017/ticket_shows
+    depends_on:
+      - mongodb
+    networks:
+      - ticket-network
+
+  booking-service:
+    build: ./booking-service
+    container_name: booking-service
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      PORT: 8003
+      MONGO_URI: mongodb://mongodb:27017/ticket_bookings
+      USER_SERVICE_URL: http://user-service:8001
+      MOVIE_SERVICE_URL: http://movie-service:8002
+      SHOW_SERVICE_URL: http://show-seat-service:8004
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - user-service
+      - movie-service
+      - show-seat-service
+    networks:
+      - ticket-network
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      PORT: 8005
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - ticket-network
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      USER_SERVICE_URL: http://user-service:8001
+      MOVIE_SERVICE_URL: http://movie-service:8002
+      BOOKING_SERVICE_URL: http://booking-service:8003
+      SHOW_SERVICE_URL: http://show-seat-service:8004
+      NOTIFICATION_SERVICE_URL: http://notification-service:8005
+    depends_on:
+      - user-service
+      - movie-service
+      - booking-service
+      - show-seat-service
+      - notification-service
+    networks:
+      - ticket-network
+
+# ── Volumes ────────────────────────────────────────────────
+volumes:
+  mongo_data:
+  rabbitmq_data:
+
+# ── Networks ───────────────────────────────────────────────
+networks:
+  ticket-network:
+    driver: bridge
